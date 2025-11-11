@@ -1,11 +1,9 @@
 import os
 from docx import Document as DocxDocument
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-
-
+import re
 
 # -----------------------------
 # Configuration
@@ -14,7 +12,6 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DOCS_DIR = os.path.join(BASE_DIR, "docs", "dell-data")
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_dell_db")
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # Hugging Face model
-
 
 # -----------------------------
 # Folder setup
@@ -25,7 +22,6 @@ def ensure_directories():
     os.makedirs(CHROMA_DB_DIR, exist_ok=True)
     print(f"📁 Verified folders: {DOCS_DIR} and {CHROMA_DB_DIR}")
 
-
 # -----------------------------
 # Document Reading
 # -----------------------------
@@ -33,27 +29,22 @@ def read_docx(filepath: str) -> str:
     """Extracts and returns text content from a .docx file."""
     doc = DocxDocument(filepath)
     text_blocks = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-    return "\\n".join(text_blocks)
-
+    return "\n".join(text_blocks)
 
 # -----------------------------
-# Text Chunking
+# Semantic Chunking
 # -----------------------------
-def semantic_chunking(text: str, chunk_size: int = 800, chunk_overlap: int = 100):
-    """Splits large text into semantically coherent chunks."""
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        separators=["\\n\\n", "\\n", ".", "!", "?", " ", ""],
-    )
-    return splitter.split_text(text)
-
+def semantic_chunk_text(text):
+    text = re.sub(r'\n{3,}', '\n\n', text.strip())
+    chunks = re.split(r'\n\s*\n', text)
+    chunks = [c.strip() for c in chunks if len(c.strip()) > 0]
+    return chunks
 
 # -----------------------------
 # Document Preparation
 # -----------------------------
 def process_all_docs(docs_folder: str):
-    """Parses all .docx files, splits into chunks, returns LangChain Document objects."""
+    """Parses all .docx files, splits into semantic chunks, returns LangChain Document objects."""
     documents = []
     for file in sorted(os.listdir(docs_folder)):
         if file.lower().endswith(".docx"):
@@ -65,22 +56,21 @@ def process_all_docs(docs_folder: str):
                 print(f"⚠️ Skipped empty file: {file}")
                 continue
 
-            chunks = semantic_chunking(text)
+            chunks = semantic_chunk_text(text)
             for idx, chunk in enumerate(chunks):
                 metadata = {"source": file, "chunk": idx}
                 documents.append(Document(page_content=chunk, metadata=metadata))
 
-            print(f"✅ {len(chunks)} chunks created for {file}")
-    print(f"\\n📚 Total Chunks Ready: {len(documents)}")
+            print(f"✅ {len(chunks)} semantic chunks created for {file}")
+    print(f"\n📚 Total Chunks Ready: {len(documents)}")
     return documents
-
 
 # -----------------------------
 # Embedding + ChromaDB Storage
 # -----------------------------
 def create_and_store_embeddings(documents):
     """Generates embeddings using Hugging Face and stores them in ChromaDB."""
-    print("\\n🚀 Creating embeddings using Hugging Face model...")
+    print("\n🚀 Creating embeddings using Hugging Face model...")
     embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
 
     vectordb = Chroma.from_documents(
@@ -88,8 +78,9 @@ def create_and_store_embeddings(documents):
         embedding=embeddings,
         persist_directory=CHROMA_DB_DIR
     )
-    
 
+    #vectordb.persist()
+    print(f"✅ Embeddings stored in: {CHROMA_DB_DIR}")
 
 # -----------------------------
 # Main Entry Point
@@ -99,6 +90,6 @@ if __name__ == "__main__":
     docs = process_all_docs(DOCS_DIR)
     if docs:
         create_and_store_embeddings(docs)
-        print("\\n🎉 Embedding creation completed successfully for Dell Knowledge Base!")
+        print("\n🎉 Embedding creation completed successfully for Dell Knowledge Base!")
     else:
         print("❌ No .docx files found in the docs/dell-data folder. Add files and re-run.")
