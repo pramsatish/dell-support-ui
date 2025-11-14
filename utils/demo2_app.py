@@ -96,7 +96,7 @@ with st.sidebar:
     role = st.radio("Select your role", ["User", "Support Agent", "Content Manager"], index=0)
 
     st.markdown("---")
-    st.markdown("<div class='muted'>Tip: Upload docs in Content Manager to improve KB (UI-only)</div>", unsafe_allow_html=True)
+    
 
 
 st.markdown("<div class='big-title'>Support System</div>", unsafe_allow_html=True)
